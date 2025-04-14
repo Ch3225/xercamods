@@ -110,5 +110,10 @@
   "xercamusic.import.success": "Music sheet imported",
   "xercamusic.import.fail.1": "You must have an empty music sheet item on your main-hand to import a music sheet in survival mode",
   "xercamusic.import.fail.4": "Could not parse command or read the music sheet file (%1$s)",
-  "xercamusic.import.fail.5": "Sheet file is broken"
+  "xercamusic.import.fail.5": "Sheet file is broken",
+
+  "gui.xercamusic.toggle_sky_interface": "Sky Mode",
+  "gui.xercamusic.toggle_sky_interface.tooltip": "Switch to Sky-style playing interface",
+  "gui.xercamusic.toggle_original_interface": "Normal Mode",
+  "gui.xercamusic.toggle_original_interface.tooltip": "Switch to original playing interface"
 }
