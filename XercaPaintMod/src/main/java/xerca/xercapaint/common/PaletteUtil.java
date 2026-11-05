@@ -3,14 +3,24 @@ package xerca.xercapaint.common;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import xerca.xercapaint.common.item.ItemPalette;
 
 public class PaletteUtil {
-    final public static PaletteUtil.Color emptinessColor = new PaletteUtil.Color(255, 236, 229);
+    private PaletteUtil() {
+    }
+
+    public static final int CUSTOM_COLOR_COUNT = 12;
+
+    public static final Color EMPTINESS_COLOR = new Color(255, 236, 229);
+    private static final float RATIO_FULL = 1.0f;
+    private static final float RATIO_EMPTY = 0.0f;
 
     public static class Color {
         public static final Color WHITE = new Color(0xFFFFFFFF);
 
-        public int r, g, b;
+        public int r;
+        public int g;
+        public int b;
 
         public Color(int r, int g, int b) {
             this.r = r;
@@ -32,26 +42,25 @@ public class PaletteUtil {
             return val;
         }
 
-        public void setGLColor(){
-            RenderSystem.setShaderColor(((float)r)/255.f, ((float)g)/255.f, ((float)b)/255.f, 1.0f);
+        public void setGLColor() {
+            RenderSystem.setShaderColor(r / 255.f, g / 255.f, b / 255.f, 1.0f);
         }
 
-        static public Color mix(Color a, Color b, float ratio){
-            if(ratio == 1.f) {
+        public static Color mix(Color a, Color b, float ratio) {
+            if (ratio == RATIO_FULL) {
                 return a;
-            }
-            else if(ratio == 0.f){
+            } else if (ratio == RATIO_EMPTY) {
                 return b;
             }
             Color res = new Color(
-                    (int)(a.r*ratio) + (int)(b.r*(1-ratio)),
-                    (int)(a.g*ratio) + (int)(b.g*(1-ratio)),
-                    (int)(a.b*ratio) + (int)(b.b*(1-ratio))
+                    (int) (a.r * ratio) + (int) (b.r * (1 - ratio)),
+                    (int) (a.g * ratio) + (int) (b.g * (1 - ratio)),
+                    (int) (a.b * ratio) + (int) (b.b * (1 - ratio))
             );
-            int averageMaximum = (int)(Math.max(Math.max(a.r, a.g), a.b)*ratio) + (int)(Math.max(Math.max(b.r, b.g), b.b)*(1-ratio));
+            int averageMaximum = (int) (Math.max(Math.max(a.r, a.g), a.b) * ratio) + (int) (Math.max(Math.max(b.r, b.g), b.b) * (1 - ratio));
 
             int maximumOfAverage = Math.max(Math.max(res.r, res.g), res.b);
-            int gainFactor = averageMaximum / maximumOfAverage;
+            int gainFactor = maximumOfAverage == 0 ? 0 : averageMaximum / maximumOfAverage;
 
             res.r *= gainFactor;
             res.g *= gainFactor;
@@ -59,15 +68,15 @@ public class PaletteUtil {
             return res;
         }
     }
-    public static class CustomColor {
-        private int totalRed = 0;
-        private int totalGreen = 0;
-        private int totalBlue = 0;
-        private int totalMaximum = 0;
 
-        private int numberOfColors = 0;
+    public static final class CustomColor {
+        public int totalRed;
+        public int totalGreen;
+        public int totalBlue;
+        public int totalMaximum;
+        public int numberOfColors;
 
-        private PaletteUtil.Color result;
+        private Color result;
 
         public CustomColor() {
             calculateResult();
@@ -75,6 +84,7 @@ public class PaletteUtil {
 
         public CustomColor(FriendlyByteBuf buf) {
             readFromBuffer(buf);
+            calculateResult();
         }
 
         public CustomColor(int totalRed, int totalGreen, int totalBlue, int totalMaximum, int numberOfColors) {
@@ -86,9 +96,9 @@ public class PaletteUtil {
             calculateResult();
         }
 
-        public void calculateResult(){
-            if(numberOfColors == 0){
-                this.result = emptinessColor;//new PaletteUtil.Color(200, 200, 200);
+        public void calculateResult() {
+            if (numberOfColors == 0) {
+                this.result = EMPTINESS_COLOR;
                 return;
             }
             int averageRed = totalRed / numberOfColors;
@@ -97,16 +107,16 @@ public class PaletteUtil {
             int averageMaximum = totalMaximum / numberOfColors;
 
             int maximumOfAverage = Math.max(Math.max(averageRed, averageGreen), averageBlue);
-            int gainFactor = averageMaximum / maximumOfAverage;
+            int gainFactor = maximumOfAverage == 0 ? 0 : averageMaximum / maximumOfAverage;
 
             int resultRed = averageRed * gainFactor;
             int resultGreen = averageGreen * gainFactor;
             int resultBlue = averageBlue * gainFactor;
 
-            this.result = new PaletteUtil.Color(resultRed, resultGreen, resultBlue);
+            this.result = new Color(resultRed, resultGreen, resultBlue);
         }
 
-        public void mix(PaletteUtil.Color toBeMixed){
+        public void mix(Color toBeMixed) {
             totalRed += toBeMixed.r;
             totalGreen += toBeMixed.g;
             totalBlue += toBeMixed.b;
@@ -115,7 +125,7 @@ public class PaletteUtil {
             calculateResult();
         }
 
-        public void reset(){
+        public void reset() {
             totalRed = 0;
             totalGreen = 0;
             totalBlue = 0;
@@ -124,15 +134,15 @@ public class PaletteUtil {
             calculateResult();
         }
 
-        public PaletteUtil.Color getColor() {
-            return result;
+        public Color getColor() {
+            return new Color(result.rgbVal());
         }
 
         public int getNumberOfColors() {
             return numberOfColors;
         }
 
-        public void writeToBuffer(FriendlyByteBuf buf){
+        public void writeToBuffer(FriendlyByteBuf buf) {
             buf.writeInt(totalRed);
             buf.writeInt(totalGreen);
             buf.writeInt(totalBlue);
@@ -140,7 +150,7 @@ public class PaletteUtil {
             buf.writeInt(numberOfColors);
         }
 
-        public void readFromBuffer(FriendlyByteBuf buf){
+        public void readFromBuffer(FriendlyByteBuf buf) {
             totalRed = buf.readInt();
             totalGreen = buf.readInt();
             totalBlue = buf.readInt();
@@ -149,36 +159,41 @@ public class PaletteUtil {
         }
     }
 
-    public static void writeCustomColorArrayToNBT(CompoundTag tag, PaletteUtil.CustomColor[] customColors){
-        int[] totalReds = new int[12];
-        int[] totalGreens = new int[12];
-        int[] totalBlues = new int[12];
-        int[] totalMaximums = new int[12];
-        int[] numbersOfColors = new int[12];
+    public static void writeCustomColorArrayToNBT(CompoundTag tag, CustomColor[] customColors) {
+        int[] totalReds = new int[CUSTOM_COLOR_COUNT];
+        int[] totalGreens = new int[CUSTOM_COLOR_COUNT];
+        int[] totalBlues = new int[CUSTOM_COLOR_COUNT];
+        int[] totalMaximums = new int[CUSTOM_COLOR_COUNT];
+        int[] numbersOfColors = new int[CUSTOM_COLOR_COUNT];
 
-        for(int i=0; i<customColors.length; i++){
+        for (int i = 0; i < customColors.length && i < CUSTOM_COLOR_COUNT; i++) {
             totalReds[i] = customColors[i].totalRed;
             totalGreens[i] = customColors[i].totalGreen;
             totalBlues[i] = customColors[i].totalBlue;
             totalMaximums[i] = customColors[i].totalMaximum;
             numbersOfColors[i] = customColors[i].numberOfColors;
         }
-        tag.putIntArray("r", totalReds);
-        tag.putIntArray("g", totalGreens);
-        tag.putIntArray("b", totalBlues);
-        tag.putIntArray("m", totalMaximums);
-        tag.putIntArray("n", numbersOfColors);
+        tag.putIntArray(ItemPalette.TAG_CUSTOM_RED, totalReds);
+        tag.putIntArray(ItemPalette.TAG_CUSTOM_GREEN, totalGreens);
+        tag.putIntArray(ItemPalette.TAG_CUSTOM_BLUE, totalBlues);
+        tag.putIntArray(ItemPalette.TAG_CUSTOM_MAXIMUM, totalMaximums);
+        tag.putIntArray(ItemPalette.TAG_CUSTOM_COUNT, numbersOfColors);
     }
 
-    public static void readCustomColorArrayFromNBT(CompoundTag tag, PaletteUtil.CustomColor[] customColors){
-        int[] totalReds = tag.getIntArray("r");
-        int[] totalGreens = tag.getIntArray("g");
-        int[] totalBlues = tag.getIntArray("b");
-        int[] totalMaximums = tag.getIntArray("m");
-        int[] numbersOfColors = tag.getIntArray("n");
+    public static void readCustomColorArrayFromNBT(CompoundTag tag, CustomColor[] customColors) {
+        int[] totalReds = tag.getIntArray(ItemPalette.TAG_CUSTOM_RED);
+        int[] totalGreens = tag.getIntArray(ItemPalette.TAG_CUSTOM_GREEN);
+        int[] totalBlues = tag.getIntArray(ItemPalette.TAG_CUSTOM_BLUE);
+        int[] totalMaximums = tag.getIntArray(ItemPalette.TAG_CUSTOM_MAXIMUM);
+        int[] numbersOfColors = tag.getIntArray(ItemPalette.TAG_CUSTOM_COUNT);
 
-        for(int i=0; i<customColors.length; i++){
-            customColors[i] = new PaletteUtil.CustomColor(totalReds[i], totalGreens[i], totalBlues[i], totalMaximums[i], numbersOfColors[i]);
+        for (int i = 0; i < customColors.length; i++) {
+            int totalRed = i < totalReds.length ? Math.max(0, totalReds[i]) : 0;
+            int totalGreen = i < totalGreens.length ? Math.max(0, totalGreens[i]) : 0;
+            int totalBlue = i < totalBlues.length ? Math.max(0, totalBlues[i]) : 0;
+            int totalMaximum = i < totalMaximums.length ? Math.max(0, totalMaximums[i]) : 0;
+            int numberOfColors = i < numbersOfColors.length ? Math.max(0, numbersOfColors[i]) : 0;
+            customColors[i] = new CustomColor(totalRed, totalGreen, totalBlue, totalMaximum, numberOfColors);
         }
     }
 }

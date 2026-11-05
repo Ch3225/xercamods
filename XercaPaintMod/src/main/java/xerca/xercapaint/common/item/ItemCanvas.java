@@ -19,30 +19,48 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.extensions.common.IClientItemExtensions;
-import org.lwjgl.system.NonnullDefault;
+import org.jetbrains.annotations.Nullable;
 import xerca.xercapaint.client.ClientStuff;
 import xerca.xercapaint.common.CanvasType;
 import xerca.xercapaint.common.entity.EntityCanvas;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.List;
 import java.util.function.Consumer;
 
-import net.minecraft.world.item.Item.Properties;
-
-@NonnullDefault
 public class ItemCanvas extends Item {
+    public static final String TAG_PIXELS = "pixels";
+    public static final String TAG_CANVAS_ID = "name";
+    public static final String TAG_VERSION = "v";
+    public static final String TAG_TITLE = "title";
+    public static final String TAG_AUTHOR = "author";
+    public static final String TAG_GENERATION = "generation";
+    public static final String TAG_SIDES_ACTIVE = "sidesActive";
+    public static final String TAG_SIDE_PIXELS = "sidePixels";
+
+    public static final int SIGNED_STACK_SIZE = 16;
+
+    private static final int ORIGINAL_GENERATION = 1;
+    private static final int COPY_GENERATION = 3;
     private final CanvasType canvasType;
+    private final boolean glass;
 
     ItemCanvas(CanvasType canvasType) {
+        this(canvasType, false);
+    }
+
+    ItemCanvas(CanvasType canvasType, boolean glass) {
         super(new Properties().stacksTo(1));
         this.canvasType = canvasType;
+        this.glass = glass;
+    }
+
+    public boolean isGlass() {
+        return glass;
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level worldIn, Player playerIn, @Nonnull InteractionHand hand) {
-        if(worldIn.isClientSide){
+    public InteractionResultHolder<ItemStack> use(Level worldIn, Player playerIn, InteractionHand hand) {
+        if (worldIn.isClientSide) {
             ClientStuff.showCanvasGui(playerIn);
         }
         return new InteractionResultHolder<>(InteractionResult.SUCCESS, playerIn.getItemInHand(hand));
@@ -61,10 +79,8 @@ public class ItemCanvas extends Item {
                     ClientStuff.showCanvasGui(player);
                 }
             } else {
-                Level world = context.getLevel();
-
                 CompoundTag tag = itemstack.getTag();
-                if (tag == null || !tag.contains("pixels") || !tag.contains("name")) {
+                if (tag == null || !tag.contains(TAG_PIXELS) || !tag.contains(TAG_CANVAS_ID)) {
                     if (context.getLevel().isClientSide) {
                         ClientStuff.showCanvasGui(player);
                     }
@@ -73,12 +89,12 @@ public class ItemCanvas extends Item {
 
                 int rotation = getRotation(direction, blockpos, player);
 
-                if (!world.isClientSide) {
-                    EntityCanvas entityCanvas = new EntityCanvas(world, tag, pos, direction, canvasType, rotation);
+                if (!context.getLevel().isClientSide) {
+                    EntityCanvas entityCanvas = new EntityCanvas(context.getLevel(), tag, pos, direction, canvasType, glass, rotation);
 
                     if (entityCanvas.survives()) {
                         entityCanvas.playPlacementSound();
-                        world.addFreshEntity(entityCanvas);
+                        context.getLevel().addFreshEntity(entityCanvas);
                         itemstack.shrink(1);
                     }
                 }
@@ -110,63 +126,55 @@ public class ItemCanvas extends Item {
         return rotation;
     }
 
-    public static boolean hasTitle(@Nonnull ItemStack stack){
-        if (stack.hasTag()) {
-            CompoundTag tag = stack.getTag();
-            if(tag != null){
-                String s = tag.getString("title");
-                return !StringUtil.isNullOrEmpty(s);
-            }
-        }
-        return false;
+    public static boolean hasTitle(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && !StringUtil.isNullOrEmpty(tag.getString(TAG_TITLE));
     }
 
-    public static Component getFullLabel(@Nonnull ItemStack stack){
+    public static int getGeneration(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag == null ? 0 : tag.getInt(TAG_GENERATION);
+    }
+
+    public static Component getFullLabel(ItemStack stack) {
         String labelString = "";
-        int generation = 0;
         Component title = getCustomTitle(stack);
-        if(title != null){
-            labelString += (title.getString() + " ");
+        if (title != null) {
+            labelString += title.getString() + " ";
         }
-        if (stack.hasTag() && stack.getTag() != null) {
-            CompoundTag tag = stack.getTag();
-            String s = tag.getString("author");
+        CompoundTag tag = stack.getTag();
+        String author = tag == null ? null : tag.getString(TAG_AUTHOR);
 
-            if (!StringUtil.isNullOrEmpty(s)) {
-                labelString += (Component.translatable("canvas.byAuthor", s)).getString() + " ";
-            }
-
-            generation = tag.getInt("generation");
+        if (!StringUtil.isNullOrEmpty(author)) {
+            labelString += Component.translatable("canvas.byAuthor", author).getString() + " ";
         }
+
+        int generation = getGeneration(stack);
         MutableComponent label = Component.literal(labelString);
-        if(generation == 1){
+        if (generation == ORIGINAL_GENERATION) {
             label.withStyle(ChatFormatting.YELLOW);
-        }
-        else if(generation >= 3){
+        } else if (generation >= COPY_GENERATION) {
             label.withStyle(ChatFormatting.GRAY);
         }
         return label;
     }
 
     @Nullable
-    public static Component getCustomTitle(@Nonnull ItemStack stack){
-        if (stack.hasTag()) {
-            CompoundTag tag = stack.getTag();
-            if(tag != null){
-                String s = tag.getString("title");
-                if (!StringUtil.isNullOrEmpty(s)) {
-                    return Component.literal(s);
-                }
+    public static Component getCustomTitle(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag != null) {
+            String s = tag.getString(TAG_TITLE);
+            if (!StringUtil.isNullOrEmpty(s)) {
+                return Component.literal(s);
             }
         }
         return null;
     }
 
-    @Nonnull
     @Override
-    public Component getName(@Nonnull ItemStack stack) {
+    public Component getName(ItemStack stack) {
         Component comp = getCustomTitle(stack);
-        if(comp != null){
+        if (comp != null) {
             return comp;
         }
         return super.getName(stack);
@@ -175,20 +183,21 @@ public class ItemCanvas extends Item {
     @Override
     @OnlyIn(Dist.CLIENT)
     public void appendHoverText(ItemStack stack, @Nullable Level worldIn, List<Component> tooltip, TooltipFlag flagIn) {
-        if (stack.hasTag() && stack.getTag() != null) {
-            CompoundTag tag = stack.getTag();
-            String s = tag.getString("author");
+        CompoundTag tag = stack.getTag();
+        if (tag != null && tag.contains(TAG_PIXELS)) {
+            String author = tag.getString(TAG_AUTHOR);
 
-            if (!StringUtil.isNullOrEmpty(s)) {
-                tooltip.add(Component.translatable("canvas.byAuthor", s));
+            if (!StringUtil.isNullOrEmpty(author)) {
+                tooltip.add(Component.translatable("canvas.byAuthor", author));
             }
 
-            int generation = tag.getInt("generation");
-            // generation = 0 means empty, 1 means original, more means copy
-            if(generation > 0){
-                tooltip.add((Component.translatable("canvas.generation." + (generation - 1))).withStyle(ChatFormatting.GRAY));
+            int generation = tag.getInt(TAG_GENERATION);
+            // generation = 0=empty, 1=original, 2=copy of org, 3=copy of copy
+            if (generation > 0) {
+                tooltip.add(Component.translatable("canvas.generation." + (generation - 1))
+                        .withStyle(generation == 1 ? ChatFormatting.GOLD : ChatFormatting.GRAY));
             }
-        }else{
+        } else {
             tooltip.add(Component.translatable("canvas.empty").withStyle(ChatFormatting.GRAY));
         }
     }
@@ -196,14 +205,19 @@ public class ItemCanvas extends Item {
     @Override
     @OnlyIn(Dist.CLIENT)
     public boolean isFoil(ItemStack stack) {
-        if(stack.hasTag()){
-            CompoundTag tag = stack.getTag();
-            if(tag != null) {
-                int generation = tag.getInt("generation");
-                return generation > 0;
-            }
-        }
-        return false;
+        return getGeneration(stack) > 0;
+    }
+
+    /**
+     * Signed canvases that are the same can be stacked.
+     */
+    public static boolean isSigned(ItemStack stack) {
+        return getGeneration(stack) > 0;
+    }
+
+    @Override
+    public int getMaxStackSize(ItemStack stack) {
+        return isSigned(stack) ? SIGNED_STACK_SIZE : super.getMaxStackSize(stack);
     }
 
     public int getWidth() {
@@ -219,10 +233,9 @@ public class ItemCanvas extends Item {
     }
 
     protected boolean mayPlace(Player playerIn, Direction directionIn, ItemStack itemStackIn, BlockPos posIn) {
-        if(canvasType == CanvasType.SMALL){
+        if (canvasType == CanvasType.SMALL) {
             return Level.isInSpawnableBounds(posIn) && playerIn.mayUseItemAt(posIn, directionIn, itemStackIn);
-        }
-        else{
+        } else {
             return !directionIn.getAxis().isVertical() && playerIn.mayUseItemAt(posIn, directionIn, itemStackIn);
         }
     }
@@ -232,5 +245,17 @@ public class ItemCanvas extends Item {
         super.initializeClient(consumer);
         consumer.accept(RenderProp.INSTANCE);
     }
-}
 
+    public static String generateName(Player player) {
+        return player.getUUID() + "_" + System.currentTimeMillis() / 100;
+    }
+
+    public static Item canvasItemFor(CanvasType type, boolean glass) {
+        return switch (type) {
+            case SMALL -> glass ? Items.ITEM_CANVAS_GLASS.get() : Items.ITEM_CANVAS.get();
+            case LONG -> glass ? Items.ITEM_CANVAS_GLASS_LONG.get() : Items.ITEM_CANVAS_LONG.get();
+            case TALL -> glass ? Items.ITEM_CANVAS_GLASS_TALL.get() : Items.ITEM_CANVAS_TALL.get();
+            case LARGE -> glass ? Items.ITEM_CANVAS_GLASS_LARGE.get() : Items.ITEM_CANVAS_LARGE.get();
+        };
+    }
+}

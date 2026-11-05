@@ -1,6 +1,7 @@
 package xerca.xercapaint.common.packets;
 
 import net.minecraft.network.FriendlyByteBuf;
+import xerca.xercapaint.common.XercaPaint;
 import xerca.xercapaint.common.PaletteUtil;
 
 import java.util.Arrays;
@@ -18,7 +19,7 @@ public class PaletteUpdatePacket {
     }
 
     public static void encode(PaletteUpdatePacket pkt, FriendlyByteBuf buf) {
-        for(PaletteUtil.CustomColor color : pkt.paletteColors){
+        for (PaletteUtil.CustomColor color : pkt.paletteColors) {
             color.writeToBuffer(buf);
         }
     }
@@ -27,11 +28,11 @@ public class PaletteUpdatePacket {
         PaletteUpdatePacket result = new PaletteUpdatePacket();
         try {
             result.paletteColors = new PaletteUtil.CustomColor[12];
-            for(int i=0; i<result.paletteColors.length; i++){
+            for (int i = 0; i < result.paletteColors.length; i++) {
                 result.paletteColors[i] = new PaletteUtil.CustomColor(buf);
             }
-        } catch (IndexOutOfBoundsException ioe) {
-            System.err.println("Exception while reading MusicUpdatePacket: " + ioe);
+        } catch (RuntimeException ioe) {
+            XercaPaint.LOGGER.error("Exception while reading MusicUpdatePacket", ioe);
             return null;
         }
         result.messageIsValid = true;

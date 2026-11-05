@@ -2,21 +2,21 @@ package xerca.xercapaint.common.packets;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
 import xerca.xercapaint.common.XercaPaint;
 import xerca.xercapaint.common.entity.EntityCanvas;
+import xerca.xercapaint.common.network.NetworkSender;
 
 import java.util.function.Supplier;
 
 public class PictureRequestPacketHandler {
     public static void handle(final PictureRequestPacket message, Supplier<NetworkEvent.Context> ctx) {
         if (!message.isMessageValid()) {
-            System.err.println("Packet was invalid");
+            XercaPaint.LOGGER.error("Packet was invalid");
             return;
         }
         ServerPlayer sendingPlayer = ctx.get().getSender();
         if (sendingPlayer == null) {
-            System.err.println("EntityPlayerMP was null when CanvasUpdatePacket was received");
+            XercaPaint.LOGGER.error("Sending player was null when CanvasUpdatePacket was received");
             return;
         }
 
@@ -27,9 +27,9 @@ public class PictureRequestPacketHandler {
     private static void processMessage(PictureRequestPacket msg, ServerPlayer pl) {
         String name = msg.getName();
         EntityCanvas.Picture picture = EntityCanvas.PICTURES.get(name);
-        if(picture != null){
-            PictureSendPacket pack = new PictureSendPacket(name, picture.version, picture.pixels);
-            XercaPaint.NETWORK_HANDLER.send(PacketDistributor.PLAYER.with(() -> pl), pack);
+        if (picture != null) {
+            PictureSendPacket pack = new PictureSendPacket(name, picture.version(), picture.pixels(), picture.sidesActive(), picture.sidePixels());
+            NetworkSender.sendToPlayer(pl, pack);
         }
     }
 }

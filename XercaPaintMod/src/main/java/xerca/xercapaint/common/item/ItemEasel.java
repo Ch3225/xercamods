@@ -7,6 +7,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -20,7 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import xerca.xercapaint.common.entity.Entities;
 import xerca.xercapaint.common.entity.EntityEasel;
 
-import net.minecraft.world.item.Item.Properties;
+import java.util.function.Consumer;
 
 public class ItemEasel extends Item {
 
@@ -42,12 +43,13 @@ public class ItemEasel extends Item {
             AABB aabb = Entities.EASEL.get().getDimensions().makeBoundingBox(vec3.x(), vec3.y(), vec3.z());
             if (level.noCollision(null, aabb) && level.getEntities(null, aabb).isEmpty()) {
                 if (level instanceof ServerLevel serverlevel) {
-                    EntityEasel easel = Entities.EASEL.get().create(serverlevel, itemstack.getTag(), null, blockpos, MobSpawnType.SPAWN_EGG, true, true);
+                    Consumer<EntityEasel> consumer = EntityType.createDefaultStackConfig(serverlevel, itemstack, ctx.getPlayer());
+                    EntityEasel easel = Entities.EASEL.get().create(serverlevel, null, consumer, blockpos, MobSpawnType.SPAWN_EGG, true, true);
                     if (easel == null) {
                         return InteractionResult.FAIL;
                     }
 
-                    float f = (float) Mth.floor((Mth.wrapDegrees(ctx.getRotation() - 180.0F) + 22.5F) / 45.0F) * 45.0F;
+                    float f = Mth.floor((Mth.wrapDegrees(ctx.getRotation() - 180.0F) + 22.5F) / 45.0F) * 45.0F;
                     easel.moveTo(easel.getX(), easel.getY(), easel.getZ(), f, 0.0F);
                     serverlevel.addFreshEntityWithPassengers(easel);
                     level.playSound(null, easel.getX(), easel.getY(), easel.getZ(), SoundEvents.ARMOR_STAND_PLACE, SoundSource.BLOCKS, 0.75F, 0.8F);

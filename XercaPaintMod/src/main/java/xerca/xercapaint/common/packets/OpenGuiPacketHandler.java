@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 public class OpenGuiPacketHandler {
     public static void handle(final OpenGuiPacket message, Supplier<NetworkEvent.Context> ctx) {
         if (!message.isMessageValid()) {
-            System.err.println("Packet was invalid");
+            XercaPaint.LOGGER.error("Packet was invalid");
             return;
         }
 
@@ -30,7 +30,7 @@ public class OpenGuiPacketHandler {
     @OnlyIn(Dist.CLIENT)
     private static void processMessage(OpenGuiPacket msg) {
         Player player = Minecraft.getInstance().player;
-        if(player != null) {
+        if (player != null) {
             if (msg.isAllowed()) {
                 Entity entity = player.level().getEntity(msg.getEaselId());
                 if (entity instanceof EntityEasel easel) {

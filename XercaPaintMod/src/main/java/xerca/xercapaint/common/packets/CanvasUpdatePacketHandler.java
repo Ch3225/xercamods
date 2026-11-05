@@ -16,14 +16,16 @@ import java.util.function.Supplier;
 import static xerca.xercapaint.common.PaletteUtil.writeCustomColorArrayToNBT;
 
 public class CanvasUpdatePacketHandler {
+    private static final double MAX_EASEL_DISTANCE_SQR = 64.0D;
+
     public static void handle(final CanvasUpdatePacket message, Supplier<NetworkEvent.Context> ctx) {
         if (!message.isMessageValid()) {
-            System.err.println("Packet was invalid");
+            XercaPaint.LOGGER.error("Packet was invalid");
             return;
         }
         ServerPlayer sendingPlayer = ctx.get().getSender();
         if (sendingPlayer == null) {
-            System.err.println("EntityPlayerMP was null when CanvasUpdatePacket was received");
+            XercaPaint.LOGGER.error("Sending player was null when CanvasUpdatePacket was received");
             return;
         }
 
@@ -31,41 +33,48 @@ public class CanvasUpdatePacketHandler {
         ctx.get().setPacketHandled(true);
     }
 
-    private static void processMessage(CanvasUpdatePacket msg, ServerPlayer pl) {
+    public static void processMessage(CanvasUpdatePacket msg, ServerPlayer pl) {
         ItemStack canvas;
         ItemStack palette;
         Entity entityEasel = null;
 
-        if(msg.getEaselId() > -1){
+        if (msg.getEaselId() > -1) {
             entityEasel = pl.level().getEntity(msg.getEaselId());
-            if(entityEasel == null){
+            if (entityEasel == null) {
                 XercaPaint.LOGGER.error("CanvasUpdatePacketHandler: Easel entity not found! easelId: {}", msg.getEaselId());
                 return;
             }
-            if(!(entityEasel instanceof EntityEasel easel)){
+            if (!(entityEasel instanceof EntityEasel easel)) {
                 XercaPaint.LOGGER.error("CanvasUpdatePacketHandler: Entity found is not an easel! easelId: {}", msg.getEaselId());
                 return;
             }
+            if (easel.getPainter() == null || !easel.getPainter().getUUID().equals(pl.getUUID())) {
+                XercaPaint.LOGGER.warn("CanvasUpdatePacketHandler: Unauthorized paint update. easelId: {} player: {}", msg.getEaselId(), pl.getName().getString());
+                return;
+            }
+            if (pl.distanceToSqr(easel) > MAX_EASEL_DISTANCE_SQR) {
+                XercaPaint.LOGGER.warn("CanvasUpdatePacketHandler: Player too far from easel. easelId: {} player: {}", msg.getEaselId(), pl.getName().getString());
+                return;
+            }
             canvas = easel.getItem();
-            if(!(canvas.getItem() instanceof ItemCanvas)){
+            if (!(canvas.getItem() instanceof ItemCanvas)) {
                 XercaPaint.LOGGER.error("CanvasUpdatePacketHandler: Canvas not found inside easel!");
                 return;
             }
             ItemStack mainHandItem = pl.getMainHandItem();
             ItemStack offHandItem = pl.getOffhandItem();
-            if(mainHandItem.getItem() instanceof ItemPalette){
+            if (mainHandItem.getItem() instanceof ItemPalette) {
                 palette = mainHandItem;
-            }else if(offHandItem.getItem() instanceof ItemPalette){
+            } else if (offHandItem.getItem() instanceof ItemPalette) {
                 palette = offHandItem;
-            }else{
+            } else {
                 XercaPaint.LOGGER.error("CanvasUpdatePacketHandler: Palette not found on player's hands!");
                 return;
             }
-        }
-        else{
+        } else {
             canvas = pl.getMainHandItem();
             palette = pl.getOffhandItem();
-            if(canvas.getItem() instanceof ItemPalette){
+            if (canvas.getItem() instanceof ItemPalette) {
                 ItemStack temp = canvas;
                 canvas = palette;
                 palette = temp;
@@ -75,14 +84,18 @@ public class CanvasUpdatePacketHandler {
         if (!canvas.isEmpty() && canvas.getItem() instanceof ItemCanvas) {
             CompoundTag comp = canvas.getOrCreateTag();
 
-            comp.putIntArray("pixels", msg.getPixels());
-            comp.putString("name", msg.getName());
-            comp.putInt("v", msg.getVersion());
-            comp.putInt("generation", 0);
+            comp.putIntArray(ItemCanvas.TAG_PIXELS, msg.getPixels());
+            comp.putString(ItemCanvas.TAG_CANVAS_ID, msg.getName());
+            comp.putInt(ItemCanvas.TAG_VERSION, msg.getVersion());
+            comp.putInt(ItemCanvas.TAG_GENERATION, 0);
+            comp.putBoolean(ItemCanvas.TAG_SIDES_ACTIVE, msg.isSidesActive());
+            if (msg.getSidePixels().length > 0) {
+                comp.putIntArray(ItemCanvas.TAG_SIDE_PIXELS, msg.getSidePixels());
+            }
             if (msg.getSigned()) {
-                comp.putString("author", pl.getName().getString());
-                comp.putString("title", msg.getTitle().trim());
-                comp.putInt("generation", 1);
+                comp.putString(ItemCanvas.TAG_AUTHOR, pl.getName().getString());
+                comp.putString(ItemCanvas.TAG_TITLE, msg.getTitle().trim());
+                comp.putInt(ItemCanvas.TAG_GENERATION, 1);
             }
 
             if (!palette.isEmpty() && palette.getItem() == Items.ITEM_PALETTE.get()) {
@@ -90,7 +103,7 @@ public class CanvasUpdatePacketHandler {
                 writeCustomColorArrayToNBT(paletteComp, msg.getPaletteColors());
             }
 
-            if(entityEasel instanceof EntityEasel easel){
+            if (entityEasel instanceof EntityEasel easel) {
                 easel.setItem(canvas, false);
                 easel.setPainter(null);
             }
